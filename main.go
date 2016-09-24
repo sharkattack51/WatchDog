@@ -13,8 +13,6 @@ const (
 	ENC_FILE  = "./encrypt_pwd.data"
 )
 
-var conf *Config
-
 func main() {
 	fmt.Println("\n")
 	fmt.Println("[[[ WatchDog ]]]")
@@ -34,7 +32,11 @@ func main() {
 	}
 
 	// 設定ファイルの読み込み
-	conf = LoadConfig(CONF_FILE)
+	conf,err := LoadConfig(CONF_FILE)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
 	if conf.Mail.PASSWORD == "" {
 		// パスワードの複合化
 		pwd, err := DecryptFromFile(ENC_FILE)
