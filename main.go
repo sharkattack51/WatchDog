@@ -16,11 +16,11 @@ const (
 var conf *Config
 
 func main() {
-	fmt.Println("\n")
 	fmt.Println("[[[ WatchDog ]]]")
 
 	// コマンドライン引数
 	p := flag.String("pwd", "", "Encrypt mail password")
+	c := flag.String("config", "", "Config file")
 	flag.Parse()
 
 	// Mailパスワードを暗号化して保存
@@ -34,7 +34,12 @@ func main() {
 	}
 
 	// 設定ファイルの読み込み
-	conf = LoadConfig(CONF_FILE)
+	if *c != "" {
+		conf = LoadConfig(*c)
+	} else {
+		conf = LoadConfig(CONF_FILE)
+	}
+
 	if conf.Mail.PASSWORD == "" {
 		// パスワードの複合化
 		pwd, err := DecryptFromFile(ENC_FILE)
@@ -45,9 +50,10 @@ func main() {
 	}
 
 	fmt.Println(time.Now().Format("2006-01-02 15:04:05"), "- StartCalculate...")
-	fmt.Println("\n")
+	fmt.Print("\n")
 	defer func() {
 		fmt.Println(time.Now().Format("2006-01-02 15:04:05"), "- Finish.")
+		fmt.Print("\n")
 	}()
 
 	// ボリューム容量を確認する
@@ -55,6 +61,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println("[ " + vol.Name + " ]")
+	fmt.Println("Total :", CalcByteToStr(vol.Total))
+	fmt.Println("Free :", CalcByteToStr(vol.Free))
+	fmt.Println("Used :", CalcByteToStr(vol.Used))
+	fmt.Println("UsedPercent :", vol.UsedPercent, "%")
+	fmt.Print("\n")
 
 	// 空き容量の閾値設定
 	if vol.Free > conf.Volume.FREE_BYTE_TH {
@@ -66,6 +78,20 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	for _, list := range rankedlist {
+		for _, info := range list {
+			// Owner情報を取得
+			info.Owner = GetDirOwner(info.Path)
+		}
+	}
+	for _, list := range rankedlist {
+		fmt.Print("\n")
+		fmt.Println("[ " + filepath.Dir(list[0].Path) + " ]")
+		for i, d := range list {
+			fmt.Println(i+1, d.Name, CalcByteToStr(d.Size), d.ModTime.Format("2006-01-02"), d.Owner)
+		}
+	}
+	fmt.Print("\n")
 
 	// メールを送信する
 	if conf.Mail.USE_SEND_MAIL {

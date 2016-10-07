@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/shirou/gopsutil/disk"
+	"io"
 	"io/ioutil"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -15,6 +18,7 @@ import (
 )
 
 type VolumeInfo struct {
+	Name        string
 	Total       int
 	Free        int
 	Used        int
@@ -31,7 +35,8 @@ type DirectoryInfo struct {
 
 // ボリューム情報を取得
 func GetVolInfo(volume string) (*VolumeInfo, error) {
-	u, err := disk.Usage(filepath.VolumeName(volume))
+	volName := filepath.VolumeName(volume)
+	u, err := disk.Usage(volName)
 	if err != nil {
 		return nil, err
 	}
@@ -41,14 +46,7 @@ func GetVolInfo(volume string) (*VolumeInfo, error) {
 	used := int(u.Used)
 	usedp := math.Floor(u.UsedPercent*10.0) / 10.0
 
-	fmt.Println("[ " + volume + " ]")
-	fmt.Println("Total :", CalcByteToStr(total))
-	fmt.Println("Free :", CalcByteToStr(free))
-	fmt.Println("Used :", CalcByteToStr(used))
-	fmt.Println("UsedPercent :", usedp, "%")
-	fmt.Println("\n")
-
-	return &VolumeInfo{total, free, used, usedp}, nil
+	return &VolumeInfo{volName, total, free, used, usedp}, nil
 }
 
 // ランキングソート
@@ -58,13 +56,8 @@ func RankingDirectories() ([][]*DirectoryInfo, error) {
 		dirs := MakeDirInfoList(filepath.Join(conf.Directory.ROOT_DIRECTORY, t))
 		list := SortList(<-dirs)
 		sort.Sort(list)
-		rankedlist = append(rankedlist, []*DirectoryInfo(list))
 
-		fmt.Println("[ " + filepath.Join(conf.Directory.ROOT_DIRECTORY, t) + " ]")
-		for i, d := range list {
-			fmt.Println(i+1, d.Name, CalcByteToStr(d.Size), d.ModTime.Format("2006-01-02"))
-		}
-		fmt.Println("\n")
+		rankedlist = append(rankedlist, []*DirectoryInfo(list))
 	}
 
 	return rankedlist, nil
@@ -85,7 +78,7 @@ func MakeDirInfoList(root string) <-chan []*DirectoryInfo {
 			go func(f os.FileInfo) {
 				path := filepath.Join(root, f.Name())
 				size, _ := GetDirSize(path)
-				owner := GetDirOwner(path)
+				owner := ""
 
 				info := &DirectoryInfo{f.Name(), path, size, f.ModTime(), owner}
 				list = append(list, info)
@@ -96,7 +89,7 @@ func MakeDirInfoList(root string) <-chan []*DirectoryInfo {
 		}
 
 		wg.Wait()
-		fmt.Print("\n\n")
+		fmt.Print("\n")
 
 		ch <- list
 	}()
@@ -164,8 +157,32 @@ func GetDirSize(path string) (int, error) {
 
 // ディレクトリオーナーを取得
 func GetDirOwner(path string) string {
-	//out, _ := exec.Command("dir", "/q", path).Output()
-	return ""
+	c1 := exec.Command("powershell", "get-acl "+`"`+path+`"`)
+	c2 := exec.Command("findstr", filepath.Base(path))
+
+	r, w := io.Pipe()
+	var out bytes.Buffer
+
+	c1.Stdout = w
+	c2.Stdin = r
+	c2.Stdout = &out
+
+	c1.Start()
+	c2.Start()
+	c1.Wait()
+	w.Close()
+	c2.Wait()
+
+	owner := ""
+	line := string(out.Bytes())
+	i := strings.IndexRune(line, '\\')
+	lineSubName := string(line[i+1:])
+	words := strings.Fields(lineSubName)
+	if len(words) > 0 {
+		owner = words[0]
+	}
+
+	return owner
 }
 
 // バイト表示に変換

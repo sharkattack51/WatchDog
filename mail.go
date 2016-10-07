@@ -39,13 +39,13 @@ func SendMail(from string, to string, cc string, pwd string, title string, msg s
 }
 
 func BuildMailBody(vol *VolumeInfo, list [][]*DirectoryInfo) (string, string) {
-	title := "【容量確認のお知らせ】"
+	title := "【容量確認のお知らせ : " + filepath.Base(conf.Directory.ROOT_DIRECTORY) + "】"
 
 	msg := ""
 	msg += "このメールは自動実行で送信しています。\n"
 	msg += "残り容量が少なくなってきています。早めのバックアップをお願いいたします。\n"
 	msg += "\n"
-	msg += fmt.Sprintf("[ %v ]の現在状況\n", filepath.VolumeName(conf.Directory.ROOT_DIRECTORY))
+	msg += fmt.Sprintf("[ %v ] の現在状況\n", filepath.VolumeName(conf.Directory.ROOT_DIRECTORY))
 	msg += fmt.Sprintf("総容量: %v\n", CalcByteToStr(vol.Total))
 	msg += fmt.Sprintf("空き容量: %v\n", CalcByteToStr(vol.Free))
 	msg += fmt.Sprintf("使用容量: %v\n", CalcByteToStr(vol.Used))
@@ -64,14 +64,15 @@ func BuildMailBody(vol *VolumeInfo, list [][]*DirectoryInfo) (string, string) {
 		w := new(tabwriter.Writer)
 		w.Init(buf, 0, 8, 0, '\t', 0)
 
-		fmt.Fprintln(w, "順\tディレクトリ名\t容量\t更新日時")
+		fmt.Fprintln(w, "順\tディレクトリ名\t容量\t更新日時\t所有者")
 		list[i] = list[i][:int(math.Min(float64(conf.Rank.MAX), float64(len(list[i]))))]
 		for j, d := range list[i] {
 			n := strconv.Itoa(j + 1)
 			s := CalcByteToStr(d.Size)
 			t := d.ModTime.Format("2006-01-02")
+			o := d.Owner
 
-			fmt.Fprintln(w, n+"\t"+d.Name+"\t"+s+"\t"+t)
+			fmt.Fprintln(w, n+"\t"+d.Name+"\t"+s+"\t"+t+"\t"+o)
 		}
 
 		fmt.Fprintln(w)
