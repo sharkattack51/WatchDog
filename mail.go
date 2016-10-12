@@ -70,7 +70,7 @@ func BuildMailBody(vol *VolumeInfo, list [][]*DirectoryInfo) (string, string) {
 			n := strconv.Itoa(j + 1)
 			s := CalcByteToStr(d.Size)
 			t := d.ModTime.Format("2006-01-02")
-			o := d.Owner
+			o := GetDirOwner(d.Path)
 
 			fmt.Fprintln(w, n+"\t"+d.Name+"\t"+s+"\t"+t+"\t"+o)
 		}

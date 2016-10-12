@@ -1,14 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
+	"github.com/mattn/go-pipeline"
 	"github.com/shirou/gopsutil/disk"
-	"io"
 	"io/ioutil"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -30,7 +28,6 @@ type DirectoryInfo struct {
 	Path    string
 	Size    int
 	ModTime time.Time
-	Owner   string
 }
 
 // ボリューム情報を取得
@@ -78,9 +75,8 @@ func MakeDirInfoList(root string) <-chan []*DirectoryInfo {
 			go func(f os.FileInfo) {
 				path := filepath.Join(root, f.Name())
 				size, _ := GetDirSize(path)
-				owner := ""
 
-				info := &DirectoryInfo{f.Name(), path, size, f.ModTime(), owner}
+				info := &DirectoryInfo{f.Name(), path, size, f.ModTime()}
 				list = append(list, info)
 
 				wg.Done()
@@ -157,32 +153,34 @@ func GetDirSize(path string) (int, error) {
 
 // ディレクトリオーナーを取得
 func GetDirOwner(path string) string {
-	c1 := exec.Command("powershell", "get-acl "+`"`+path+`"`)
-	c2 := exec.Command("findstr", filepath.Base(path))
+	d, _ := os.Stat(path)
 
-	r, w := io.Pipe()
-	var out bytes.Buffer
+	// DBの確認
+	c := GetDB(path)
+	if c != nil {
+		if c.ModTime.Unix() >= d.ModTime().Unix() {
+			return c.Owner
+		}
+	}
 
-	c1.Stdout = w
-	c2.Stdin = r
-	c2.Stdout = &out
-
-	c1.Start()
-	c2.Start()
-	c1.Wait()
-	w.Close()
-	c2.Wait()
-
-	owner := ""
-	line := string(out.Bytes())
+	out, _ := pipeline.Output(
+		[]string{"powershell", "get-acl " + `"` + path + `"`},
+		[]string{"findstr", filepath.Base(path)},
+	)
+	line := string(out)
 	i := strings.IndexRune(line, '\\')
 	lineSubName := string(line[i+1:])
 	words := strings.Fields(lineSubName)
 	if len(words) > 0 {
-		owner = words[0]
+
+		// DBに登録
+		c = &CachedData{path, d.ModTime(), words[0]}
+		_ = PutDB(path, c)
+
+		return c.Owner
 	}
 
-	return owner
+	return ""
 }
 
 // バイト表示に変換

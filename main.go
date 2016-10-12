@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/syndtr/goleveldb/leveldb"
 	"log"
 	"path/filepath"
 	"time"
@@ -11,11 +12,18 @@ import (
 const (
 	CONF_FILE = "./watchdog.conf"
 	ENC_FILE  = "./encrypt_pwd.data"
+	DB_FILE   = "./level.db"
 )
 
 var conf *Config
+var db *leveldb.DB
 
 func main() {
+	timescore := time.Now()
+	defer func() {
+		fmt.Println("score:", time.Now().Sub(timescore).Seconds())
+	}()
+
 	fmt.Println("[[[ WatchDog ]]]")
 
 	// コマンドライン引数
@@ -73,22 +81,23 @@ func main() {
 		return
 	}
 
+	// キャッシュ確認用DB
+	db, err = OpenDB(DB_FILE)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
 	// 各ディレクトリの容量を確認してランキング付け
 	rankedlist, err := RankingDirectories()
 	if err != nil {
 		log.Fatal(err)
 	}
 	for _, list := range rankedlist {
-		for _, info := range list {
-			// Owner情報を取得
-			info.Owner = GetDirOwner(info.Path)
-		}
-	}
-	for _, list := range rankedlist {
 		fmt.Print("\n")
 		fmt.Println("[ " + filepath.Dir(list[0].Path) + " ]")
 		for i, d := range list {
-			fmt.Println(i+1, d.Name, CalcByteToStr(d.Size), d.ModTime.Format("2006-01-02"), d.Owner)
+			fmt.Println(i+1, d.Name, CalcByteToStr(d.Size), d.ModTime.Format("2006-01-02"), GetDirOwner(d.Path))
 		}
 	}
 	fmt.Print("\n")
