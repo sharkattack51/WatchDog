@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/BurntSushi/toml"
-	"log"
 )
 
 type Config struct {
@@ -35,12 +34,12 @@ type RankConfig struct {
 }
 
 // 読み込み
-func LoadConfig(path string) *Config {
+func LoadConfig(path string) (*Config, error) {
 	c := Config{}
 	_, err := toml.DecodeFile(path, &c)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	return &c
+	return &c, nil
 }

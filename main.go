@@ -42,10 +42,14 @@ func main() {
 	}
 
 	// 設定ファイルの読み込み
+	var err error
 	if *c != "" {
-		conf = LoadConfig(*c)
+		conf, err = LoadConfig(*c)
 	} else {
-		conf = LoadConfig(CONF_FILE)
+		conf, err = LoadConfig(CONF_FILE)
+	}
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	if conf.Mail.PASSWORD == "" {
